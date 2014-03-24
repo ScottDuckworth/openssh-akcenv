@@ -509,7 +509,8 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
 	struct stat st;
 	int status, devnull, p[2], i;
 	pid_t pid;
-	char *username, errmsg[512];
+	long len;
+	char *username, *keytext, errmsg[512];
 
 	if (options.authorized_keys_command == NULL ||
 	    options.authorized_keys_command[0] != '/')
@@ -567,6 +568,43 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
 	case 0: /* child */
 		for (i = 0; i < NSIG; i++)
 			signal(i, SIG_DFL);
+
+		keytext = key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX);
+		if (setenv(SSH_KEY_FINGERPRINT_ENV_NAME, keytext, 1) == -1) {
+			error("%s: setenv: %s", __func__, strerror(errno));
+			_exit(1);
+		}
+
+		if ((f = tmpfile()) == NULL) {
+			error("%s: tmpfile: %s", __func__, strerror(errno));
+			_exit(1);
+		}
+		if (!key_write(key, f)) {
+			error("%s: key_write: %s", __func__, strerror(errno));
+			_exit(1);
+		}
+		if ((len = ftell(f)) == -1) {
+			error("%s: ftell: %s", __func__, strerror(errno));
+			_exit(1);
+		}
+		if ((keytext = xmalloc(len + 1)) == NULL) {
+			error("%s: xmalloc: %s", __func__, strerror(errno));
+			_exit(1);
+		}
+		if ((fseek(f, 0, SEEK_SET)) != 0) {
+			error("%s: fseek: %s", __func__, strerror(errno));
+			_exit(1);
+		}
+		if (fread(keytext, 1, len, f) != len) {
+			error("%s: fread: %s", __func__, strerror(errno));
+			_exit(1);
+		}
+		keytext[len] = '\0';
+		fclose(f);
+		if (setenv(SSH_KEY_ENV_NAME, keytext, 1) == -1) {
+			error("%s: setenv: %s", __func__, strerror(errno));
+			_exit(1);
+		}
 
 		if ((devnull = open(_PATH_DEVNULL, O_RDWR)) == -1) {
 			error("%s: open %s: %s", __func__, _PATH_DEVNULL,
