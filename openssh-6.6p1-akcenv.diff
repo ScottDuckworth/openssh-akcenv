@@ -70,3 +70,19 @@ index c94633b..411ea86 100644
 + * passed to AuthorizedKeysCommand.
 + */
 +#define SSH_KEY_FINGERPRINT_ENV_NAME "SSH_KEY_FINGERPRINT"
+diff --git a/sshd_config.5 b/sshd_config.5
+index ce71efe..3f82d66 100644
+--- a/sshd_config.5
++++ b/sshd_config.5
+@@ -203,6 +203,11 @@ It will be invoked with a single argument of the username
+ being authenticated, and should produce on standard output zero or
+ more lines of authorized_keys output (see AUTHORIZED_KEYS in
+ .Xr sshd 8 ) .
++The key being used for authentication (the key's type and the key text itself,
++separated by a space) will be available in the
++.Ev SSH_KEY
++environment variable, and the fingerprint of the key will be available in the
++.Ev SSH_KEY_FINGERPRINT environment variable.
+ If a key supplied by AuthorizedKeysCommand does not successfully authenticate
+ and authorize the user then public key authentication continues using the usual
+ .Cm AuthorizedKeysFile
