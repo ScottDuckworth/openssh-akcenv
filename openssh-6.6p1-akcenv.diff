@@ -1,5 +1,5 @@
 diff --git a/auth2-pubkey.c b/auth2-pubkey.c
-index 0fd27bb..7a81525 100644
+index 0fd27bb..95c7517 100644
 --- a/auth2-pubkey.c
 +++ b/auth2-pubkey.c
 @@ -509,7 +509,8 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
@@ -12,12 +12,15 @@ index 0fd27bb..7a81525 100644
  
  	if (options.authorized_keys_command == NULL ||
  	    options.authorized_keys_command[0] != '/')
-@@ -568,6 +569,37 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
+@@ -568,6 +569,43 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
  		for (i = 0; i < NSIG; i++)
  			signal(i, SIG_DFL);
  
-+		setenv(SSH_KEY_FINGERPRINT_ENV_NAME,
-+			key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX), 1);
++		keytext = key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX);
++		if (setenv(SSH_KEY_FINGERPRINT_ENV_NAME, keytext, 1) == -1) {
++			error("%s: setenv: %s", __func__, strerror(errno));
++			_exit(1);
++		}
 +
 +		if ((f = tmpfile()) == NULL) {
 +			error("%s: tmpfile: %s", __func__, strerror(errno));
@@ -45,7 +48,10 @@ index 0fd27bb..7a81525 100644
 +		}
 +		keytext[len] = '\0';
 +		fclose(f);
-+		setenv(SSH_KEY_ENV_NAME, keytext, 1);
++		if (setenv(SSH_KEY_ENV_NAME, keytext, 1) == -1) {
++			error("%s: setenv: %s", __func__, strerror(errno));
++			_exit(1);
++		}
 +
  		if ((devnull = open(_PATH_DEVNULL, O_RDWR)) == -1) {
  			error("%s: open %s: %s", __func__, _PATH_DEVNULL,
