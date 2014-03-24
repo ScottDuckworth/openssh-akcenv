@@ -1,4 +1,4 @@
-/* $OpenBSD: auth2-gss.c,v 1.21 2014/02/26 20:28:44 djm Exp $ */
+/* $OpenBSD: auth2-gss.c,v 1.20 2013/05/17 00:13:13 djm Exp $ */
 
 /*
  * Copyright (c) 2001-2003 Simon Wilkinson. All rights reserved.
@@ -62,6 +62,7 @@ userauth_gssapi(Authctxt *authctxt)
 	gss_OID_desc goid = {0, NULL};
 	Gssctxt *ctxt = NULL;
 	int mechs;
+	gss_OID_set supported;
 	int present;
 	OM_uint32 ms;
 	u_int len;
@@ -76,6 +77,7 @@ userauth_gssapi(Authctxt *authctxt)
 		return (0);
 	}
 
+	ssh_gssapi_supported_oids(&supported);
 	do {
 		mechs--;
 
@@ -88,11 +90,14 @@ userauth_gssapi(Authctxt *authctxt)
 		    doid[1] == len - 2) {
 			goid.elements = doid + 2;
 			goid.length   = len - 2;
-			ssh_gssapi_test_oid_supported(&ms, &goid, &present);
+			gss_test_oid_set_member(&ms, &goid, supported,
+			    &present);
 		} else {
 			logit("Badly formed OID received");
 		}
 	} while (mechs > 0 && !present);
+
+	gss_release_oid_set(&ms, &supported);
 
 	if (!present) {
 		free(doid);

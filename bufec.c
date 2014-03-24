@@ -1,4 +1,4 @@
-/* $OpenBSD: bufec.c,v 1.3 2014/01/31 16:39:19 tedu Exp $ */
+/* $OpenBSD: bufec.c,v 1.2 2013/05/17 00:13:13 djm Exp $ */
 /*
  * Copyright (c) 2010 Damien Miller <djm@mindrot.org>
  *
@@ -77,7 +77,7 @@ buffer_put_ecpoint_ret(Buffer *buffer, const EC_GROUP *curve,
 	ret = 0;
  out:
 	if (buf != NULL) {
-		explicit_bzero(buf, len);
+		bzero(buf, len);
 		free(buf);
 	}
 	BN_CTX_free(bnctx);
@@ -130,7 +130,7 @@ buffer_get_ecpoint_ret(Buffer *buffer, const EC_GROUP *curve,
 	ret = 0;
  out:
 	BN_CTX_free(bnctx);
-	explicit_bzero(buf, len);
+	bzero(buf, len);
 	free(buf);
 	return ret;
 }

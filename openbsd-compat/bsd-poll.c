@@ -1,4 +1,4 @@
-/* $Id: bsd-poll.c,v 1.6 2014/02/05 23:44:13 dtucker Exp $ */
+/* $Id: bsd-poll.c,v 1.5 2013/11/08 10:12:58 dtucker Exp $ */
 
 /*
  * Copyright (c) 2004, 2005, 2007 Darren Tucker (dtucker at zip com au).
@@ -109,9 +109,12 @@ poll(struct pollfd *fds, nfds_t nfds, int timeout)
 	}
 
 out:
-	free(readfds);
-	free(writefds);
-	free(exceptfds);
+	if (readfds != NULL)
+		free(readfds);
+	if (writefds != NULL)
+		free(writefds);
+	if (exceptfds != NULL)
+		free(exceptfds);
 	if (ret == -1)
 		errno = saved_errno;
 	return ret;
