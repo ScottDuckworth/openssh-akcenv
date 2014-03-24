@@ -569,8 +569,11 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
 		for (i = 0; i < NSIG; i++)
 			signal(i, SIG_DFL);
 
-		setenv(SSH_KEY_FINGERPRINT_ENV_NAME,
-			key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX), 1);
+		keytext = key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX);
+		if (setenv(SSH_KEY_FINGERPRINT_ENV_NAME, keytext, 1) == -1) {
+			error("%s: setenv: %s", __func__, strerror(errno));
+			_exit(1);
+		}
 
 		if ((f = tmpfile()) == NULL) {
 			error("%s: tmpfile: %s", __func__, strerror(errno));
@@ -598,7 +601,10 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
 		}
 		keytext[len] = '\0';
 		fclose(f);
-		setenv(SSH_KEY_ENV_NAME, keytext, 1);
+		if (setenv(SSH_KEY_ENV_NAME, keytext, 1) == -1) {
+			error("%s: setenv: %s", __func__, strerror(errno));
+			_exit(1);
+		}
 
 		if ((devnull = open(_PATH_DEVNULL, O_RDWR)) == -1) {
 			error("%s: open %s: %s", __func__, _PATH_DEVNULL,
