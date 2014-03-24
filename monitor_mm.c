@@ -1,4 +1,4 @@
-/* $OpenBSD: monitor_mm.c,v 1.19 2014/01/04 17:50:55 tedu Exp $ */
+/* $OpenBSD: monitor_mm.c,v 1.18 2013/11/08 00:39:15 djm Exp $ */
 /*
  * Copyright 2002 Niels Provos <provos@citi.umich.edu>
  * All rights reserved.
@@ -35,7 +35,6 @@
 
 #include <errno.h>
 #include <stdarg.h>
-#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -47,7 +46,7 @@
 static int
 mm_compare(struct mm_share *a, struct mm_share *b)
 {
-	ptrdiff_t diff = (char *)a->address - (char *)b->address;
+	long diff = (char *)a->address - (char *)b->address;
 
 	if (diff == 0)
 		return (0);
@@ -74,8 +73,8 @@ mm_make_entry(struct mm_master *mm, struct mmtree *head,
 
 	tmp2 = RB_INSERT(mmtree, head, tmp);
 	if (tmp2 != NULL)
-		fatal("mm_make_entry(%p): double address %p->%p(%zu)",
-		    mm, tmp2, address, size);
+		fatal("mm_make_entry(%p): double address %p->%p(%lu)",
+		    mm, tmp2, address, (u_long)size);
 
 	return (tmp);
 }
@@ -102,7 +101,7 @@ mm_create(struct mm_master *mmalloc, size_t size)
 
 	address = xmmap(size);
 	if (address == (void *)MAP_FAILED)
-		fatal("mmap(%zu): %s", size, strerror(errno));
+		fatal("mmap(%lu): %s", (u_long)size, strerror(errno));
 
 	mm->address = address;
 	mm->size = size;
@@ -142,7 +141,7 @@ mm_destroy(struct mm_master *mm)
 
 #ifdef HAVE_MMAP
 	if (munmap(mm->address, mm->size) == -1)
-		fatal("munmap(%p, %zu): %s", mm->address, mm->size,
+		fatal("munmap(%p, %lu): %s", mm->address, (u_long)mm->size,
 		    strerror(errno));
 #else
 	fatal("%s: UsePrivilegeSeparation=yes and Compression=yes not supported",
@@ -161,7 +160,7 @@ mm_xmalloc(struct mm_master *mm, size_t size)
 
 	address = mm_malloc(mm, size);
 	if (address == NULL)
-		fatal("%s: mm_malloc(%zu)", __func__, size);
+		fatal("%s: mm_malloc(%lu)", __func__, (u_long)size);
 	memset(address, 0, size);
 	return (address);
 }
@@ -196,7 +195,7 @@ mm_malloc(struct mm_master *mm, size_t size)
 
 	/* Does not change order in RB tree */
 	mms->size -= size;
-	mms->address = (char *)mms->address + size;
+	mms->address = (u_char *)mms->address + size;
 
 	if (mms->size == 0) {
 		RB_REMOVE(mmtree, &mm->rb_free, mms);
@@ -249,8 +248,8 @@ mm_free(struct mm_master *mm, void *address)
 
 	/* Check if range does not overlap */
 	if (prev != NULL && MM_ADDRESS_END(prev) > address)
-		fatal("mm_free: memory corruption: %p(%zu) > %p",
-		    prev->address, prev->size, address);
+		fatal("mm_free: memory corruption: %p(%lu) > %p",
+		    prev->address, (u_long)prev->size, address);
 
 	/* See if we can merge backwards */
 	if (prev != NULL && MM_ADDRESS_END(prev) == address) {
@@ -272,8 +271,8 @@ mm_free(struct mm_master *mm, void *address)
 		return;
 
 	if (MM_ADDRESS_END(prev) > mms->address)
-		fatal("mm_free: memory corruption: %p < %p(%zu)",
-		    mms->address, prev->address, prev->size);
+		fatal("mm_free: memory corruption: %p < %p(%lu)",
+		    mms->address, prev->address, (u_long)prev->size);
 	if (MM_ADDRESS_END(prev) != mms->address)
 		return;
 
@@ -344,12 +343,12 @@ mm_share_sync(struct mm_master **pmm, struct mm_master **pmmalloc)
 void
 mm_memvalid(struct mm_master *mm, void *address, size_t size)
 {
-	void *end = (char *)address + size;
+	void *end = (u_char *)address + size;
 
 	if (address < mm->address)
 		fatal("mm_memvalid: address too small: %p", address);
 	if (end < address)
 		fatal("mm_memvalid: end < address: %p < %p", end, address);
-	if (end > MM_ADDRESS_END(mm))
+	if (end > (void *)((u_char *)mm->address + mm->size))
 		fatal("mm_memvalid: address too large: %p", address);
 }

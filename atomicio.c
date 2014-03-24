@@ -56,10 +56,8 @@ atomicio6(ssize_t (*f) (int, void *, size_t), int fd, void *_s, size_t n,
 	ssize_t res;
 	struct pollfd pfd;
 
-#ifndef BROKEN_READ_COMPARISON
 	pfd.fd = fd;
 	pfd.events = f == read ? POLLIN : POLLOUT;
-#endif
 	while (n > pos) {
 		res = (f) (fd, s + pos, n - pos);
 		switch (res) {
@@ -67,9 +65,7 @@ atomicio6(ssize_t (*f) (int, void *, size_t), int fd, void *_s, size_t n,
 			if (errno == EINTR)
 				continue;
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-#ifndef BROKEN_READ_COMPARISON
 				(void)poll(&pfd, 1, -1);
-#endif
 				continue;
 			}
 			return 0;

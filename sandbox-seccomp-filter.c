@@ -132,7 +132,7 @@ struct ssh_sandbox {
 };
 
 struct ssh_sandbox *
-ssh_sandbox_init(struct monitor *monitor)
+ssh_sandbox_init(void)
 {
 	struct ssh_sandbox *box;
 

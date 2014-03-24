@@ -1,4 +1,4 @@
-/* $OpenBSD: sshconnect2.c,v 1.201 2014/01/09 23:20:00 djm Exp $ */
+/* $OpenBSD: sshconnect2.c,v 1.198 2013/06/05 12:52:38 dtucker Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  * Copyright (c) 2008 Damien Miller.  All rights reserved.
@@ -188,12 +188,11 @@ ssh_kex2(char *host, struct sockaddr *hostaddr, u_short port)
 	}
 	if (options.hostkeyalgorithms != NULL)
 		myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] =
-		    compat_pkalg_proposal(options.hostkeyalgorithms);
+		    options.hostkeyalgorithms;
 	else {
 		/* Prefer algorithms that we already have keys for */
 		myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] =
-		    compat_pkalg_proposal(
-		    order_hostkeyalgs(host, hostaddr, port));
+		    order_hostkeyalgs(host, hostaddr, port);
 	}
 	if (options.kex_algorithms != NULL)
 		myproposal[PROPOSAL_KEX_ALGS] = options.kex_algorithms;
@@ -209,7 +208,6 @@ ssh_kex2(char *host, struct sockaddr *hostaddr, u_short port)
 	kex->kex[KEX_DH_GEX_SHA1] = kexgex_client;
 	kex->kex[KEX_DH_GEX_SHA256] = kexgex_client;
 	kex->kex[KEX_ECDH_SHA2] = kexecdh_client;
-	kex->kex[KEX_C25519_SHA256] = kexc25519_client;
 	kex->client_version_string=client_version_string;
 	kex->server_version_string=server_version_string;
 	kex->verify_host_key=&verify_host_key_callback;
@@ -1006,7 +1004,7 @@ jpake_password_to_secret(Authctxt *authctxt, const char *crypt_scheme,
 	debug3("%s: crypted = %s", __func__, crypted);
 #endif
 
-	if (hash_buffer(crypted, strlen(crypted), SSH_DIGEST_SHA1,
+	if (hash_buffer(crypted, strlen(crypted), EVP_sha256(),
 	    &secret, &secret_len) != 0)
 		fatal("%s: hash_buffer", __func__);
 
@@ -1490,31 +1488,17 @@ userauth_pubkey(Authctxt *authctxt)
 		 * encrypted keys we cannot do this and have to load the
 		 * private key instead
 		 */
-		if (id->key != NULL) {
-			if (key_type_plain(id->key->type) == KEY_RSA &&
-			    (datafellows & SSH_BUG_RSASIGMD5) != 0) {
-				debug("Skipped %s key %s for RSA/MD5 server",
-				    key_type(id->key), id->filename);
-			} else if (id->key->type != KEY_RSA1) {
-				debug("Offering %s public key: %s",
-				    key_type(id->key), id->filename);
-				sent = send_pubkey_test(authctxt, id);
-			}
-		} else {
+		if (id->key && id->key->type != KEY_RSA1) {
+			debug("Offering %s public key: %s", key_type(id->key),
+			    id->filename);
+			sent = send_pubkey_test(authctxt, id);
+		} else if (id->key == NULL) {
 			debug("Trying private key: %s", id->filename);
 			id->key = load_identity_file(id->filename,
 			    id->userprovided);
 			if (id->key != NULL) {
 				id->isprivate = 1;
-				if (key_type_plain(id->key->type) == KEY_RSA &&
-				    (datafellows & SSH_BUG_RSASIGMD5) != 0) {
-					debug("Skipped %s key %s for RSA/MD5 "
-					    "server", key_type(id->key),
-					    id->filename);
-				} else {
-					sent = sign_and_send_pubkey(
-					    authctxt, id);
-				}
+				sent = sign_and_send_pubkey(authctxt, id);
 				key_free(id->key);
 				id->key = NULL;
 			}

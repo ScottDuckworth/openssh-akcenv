@@ -1,4 +1,4 @@
-/* $OpenBSD: canohost.c,v 1.70 2014/01/19 04:17:29 dtucker Exp $ */
+/* $OpenBSD: canohost.c,v 1.67 2013/05/17 00:13:13 djm Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -20,6 +20,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include <ctype.h>
 #include <errno.h>
 #include <netdb.h>
 #include <stdio.h>
@@ -47,6 +48,7 @@ static char *
 get_remote_hostname(int sock, int use_dns)
 {
 	struct sockaddr_storage from;
+	int i;
 	socklen_t fromlen;
 	struct addrinfo hints, *ai, *aitop;
 	char name[NI_MAXHOST], ntop[NI_MAXHOST], ntop2[NI_MAXHOST];
@@ -97,9 +99,13 @@ get_remote_hostname(int sock, int use_dns)
 		return xstrdup(ntop);
 	}
 
-	/* Names are stores in lowercase. */
-	lowercase(name);
-
+	/*
+	 * Convert it to all lowercase (which is expected by the rest
+	 * of this software).
+	 */
+	for (i = 0; name[i]; i++)
+		if (isupper(name[i]))
+			name[i] = (char)tolower(name[i]);
 	/*
 	 * Map it back to an IP address and check that the given
 	 * address actually is an address of this host.  This is
@@ -154,7 +160,8 @@ check_ip_options(int sock, char *ipaddr)
 #ifdef IP_OPTIONS
 	u_char options[200];
 	char text[sizeof(options) * 3 + 1];
-	socklen_t option_size, i;
+	socklen_t option_size;
+	u_int i;
 	int ipproto;
 	struct protoent *ip;
 

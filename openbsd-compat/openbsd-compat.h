@@ -1,4 +1,4 @@
-/* $Id: openbsd-compat.h,v 1.60 2013/12/07 00:51:54 djm Exp $ */
+/* $Id: openbsd-compat.h,v 1.58 2013/06/05 22:30:21 dtucker Exp $ */
 
 /*
  * Copyright (c) 1999-2003 Damien Miller.  All rights reserved.
@@ -44,7 +44,6 @@
 #include "vis.h"
 #include "getrrsetbyname.h"
 #include "sha2.h"
-#include "blf.h"
 
 #ifndef HAVE_BASENAME
 char *basename(const char *path);
@@ -162,13 +161,9 @@ int writev(int, struct iovec *, int);
 
 #ifndef HAVE_GETPEEREID
 int getpeereid(int , uid_t *, gid_t *);
-#endif
+#endif 
 
-#ifdef HAVE_ARC4RANDOM
-# ifndef HAVE_ARC4RANDOM_STIR
-#  define arc4random_stir()
-# endif
-#else
+#ifndef HAVE_ARC4RANDOM
 unsigned int arc4random(void);
 void arc4random_stir(void);
 #endif /* !HAVE_ARC4RANDOM */
@@ -239,11 +234,6 @@ char *group_from_gid(gid_t, int);
 
 #ifndef HAVE_TIMINGSAFE_BCMP
 int timingsafe_bcmp(const void *, const void *, size_t);
-#endif
-
-#ifndef HAVE_BCRYPT_PBKDF
-int	bcrypt_pbkdf(const char *, size_t, const u_int8_t *, size_t,
-    u_int8_t *, size_t, unsigned int);
 #endif
 
 void *xmmap(size_t size);

@@ -1,4 +1,4 @@
-/* $OpenBSD: sshd.c,v 1.414 2014/01/09 23:26:48 djm Exp $ */
+/* $OpenBSD: sshd.c,v 1.404 2013/07/19 07:37:48 markus Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -315,7 +315,6 @@ static void
 sighup_restart(void)
 {
 	logit("Received SIGHUP; restarting.");
-	platform_pre_restart();
 	close_listen_socks();
 	close_startup_pipes();
 	alarm(0);  /* alarm timer persists across exec */
@@ -372,7 +371,7 @@ grace_alarm_handler(int sig)
 	 */
 	if (getpgid(0) == getpid()) {
 		signal(SIGTERM, SIG_IGN);
-		kill(0, SIGTERM);
+		killpg(0, SIGTERM);
 	}
 
 	/* Log error and exit. */
@@ -398,6 +397,7 @@ generate_ephemeral_server_key(void)
 	verbose("RSA key generation complete.");
 
 	arc4random_buf(sensitive_data.ssh1_cookie, SSH_SESSION_KEY_LENGTH);
+	arc4random_stir();
 }
 
 /*ARGSUSED*/
@@ -480,11 +480,10 @@ sshd_exchange_identification(int sock_in, int sock_out)
 	    &remote_major, &remote_minor, remote_version) != 3) {
 		s = "Protocol mismatch.\n";
 		(void) atomicio(vwrite, sock_out, s, strlen(s));
-		logit("Bad protocol version identification '%.100s' "
-		    "from %s port %d", client_version_string,
-		    get_remote_ipaddr(), get_remote_port());
 		close(sock_in);
 		close(sock_out);
+		logit("Bad protocol version identification '%.100s' from %s",
+		    client_version_string, get_remote_ipaddr());
 		cleanup_exit(255);
 	}
 	debug("Client protocol version %d.%d; client software version %.100s",
@@ -492,23 +491,16 @@ sshd_exchange_identification(int sock_in, int sock_out)
 
 	compat_datafellows(remote_version);
 
-	if ((datafellows & SSH_BUG_PROBE) != 0) {
+	if (datafellows & SSH_BUG_PROBE) {
 		logit("probed from %s with %s.  Don't panic.",
 		    get_remote_ipaddr(), client_version_string);
 		cleanup_exit(255);
 	}
-	if ((datafellows & SSH_BUG_SCANNER) != 0) {
+
+	if (datafellows & SSH_BUG_SCANNER) {
 		logit("scanned from %s with %s.  Don't panic.",
 		    get_remote_ipaddr(), client_version_string);
 		cleanup_exit(255);
-	}
-	if ((datafellows & SSH_BUG_RSASIGMD5) != 0) {
-		logit("Client version \"%.100s\" uses unsafe RSA signature "
-		    "scheme; disabling use of RSA keys", remote_version);
-	}
-	if ((datafellows & SSH_BUG_DERIVEKEY) != 0) {
-		fatal("Client version \"%.100s\" uses unsafe key agreement; "
-		    "refusing connection", remote_version);
 	}
 
 	mismatch = 0;
@@ -621,7 +613,6 @@ privsep_preauth_child(void)
 	arc4random_stir();
 	arc4random_buf(rnd, sizeof(rnd));
 	RAND_seed(rnd, sizeof(rnd));
-	bzero(rnd, sizeof(rnd));
 
 	/* Demote the private keys to public keys. */
 	demote_sensitive_data();
@@ -660,7 +651,7 @@ privsep_preauth(Authctxt *authctxt)
 	pmonitor->m_pkex = &xxx_kex;
 
 	if (use_privsep == PRIVSEP_ON)
-		box = ssh_sandbox_init(pmonitor);
+		box = ssh_sandbox_init();
 	pid = fork();
 	if (pid == -1) {
 		fatal("fork of unprivileged child failed");
@@ -756,7 +747,6 @@ privsep_postauth(Authctxt *authctxt)
 	arc4random_stir();
 	arc4random_buf(rnd, sizeof(rnd));
 	RAND_seed(rnd, sizeof(rnd));
-	bzero(rnd, sizeof(rnd));
 
 	/* Drop privileges */
 	do_setusercontext(authctxt->pw);
@@ -792,7 +782,6 @@ list_hostkey_types(void)
 		case KEY_RSA:
 		case KEY_DSA:
 		case KEY_ECDSA:
-		case KEY_ED25519:
 			if (buffer_len(&b) > 0)
 				buffer_append(&b, ",", 1);
 			p = key_ssh_name(key);
@@ -809,7 +798,6 @@ list_hostkey_types(void)
 		case KEY_RSA_CERT:
 		case KEY_DSA_CERT:
 		case KEY_ECDSA_CERT:
-		case KEY_ED25519_CERT:
 			if (buffer_len(&b) > 0)
 				buffer_append(&b, ",", 1);
 			p = key_ssh_name(key);
@@ -837,7 +825,6 @@ get_hostkey_by_type(int type, int need_private)
 		case KEY_RSA_CERT:
 		case KEY_DSA_CERT:
 		case KEY_ECDSA_CERT:
-		case KEY_ED25519_CERT:
 			key = sensitive_data.host_certificates[i];
 			break;
 		default:
@@ -1152,7 +1139,6 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 	struct sockaddr_storage from;
 	socklen_t fromlen;
 	pid_t pid;
-	u_char rnd[256];
 
 	/* setup fd set for accept */
 	fdset = NULL;
@@ -1353,9 +1339,6 @@ server_accept_loop(int *sock_in, int *sock_out, int *newsock, int *config_s)
 			 * from that of the child
 			 */
 			arc4random_stir();
-			arc4random_buf(rnd, sizeof(rnd));
-			RAND_seed(rnd, sizeof(rnd));
-			bzero(rnd, sizeof(rnd));
 		}
 
 		/* child process check (or debug mode) */
@@ -1710,7 +1693,6 @@ main(int ac, char **av)
 		case KEY_RSA:
 		case KEY_DSA:
 		case KEY_ECDSA:
-		case KEY_ED25519:
 			sensitive_data.have_ssh2_key = 1;
 			break;
 		}
@@ -1877,6 +1859,9 @@ main(int ac, char **av)
 	/* Reinitialize the log (because of the fork above). */
 	log_init(__progname, options.log_level, options.log_facility, log_stderr);
 
+	/* Initialize the random number generator. */
+	arc4random_stir();
+
 	/* Chdir to the root directory so that the current disk can be
 	   unmounted if desired. */
 	if (chdir("/") == -1)
@@ -1948,14 +1933,13 @@ main(int ac, char **av)
 		dup2(STDIN_FILENO, STDOUT_FILENO);
 		if (startup_pipe == -1)
 			close(REEXEC_STARTUP_PIPE_FD);
-		else if (startup_pipe != REEXEC_STARTUP_PIPE_FD) {
+		else
 			dup2(startup_pipe, REEXEC_STARTUP_PIPE_FD);
-			close(startup_pipe);
-			startup_pipe = REEXEC_STARTUP_PIPE_FD;
-		}
 
 		dup2(config_s[1], REEXEC_CONFIG_PASS_FD);
 		close(config_s[1]);
+		if (startup_pipe != -1)
+			close(startup_pipe);
 
 		execv(rexec_argv[0], rexec_argv);
 
@@ -1966,6 +1950,8 @@ main(int ac, char **av)
 		    options.log_facility, log_stderr);
 
 		/* Clean up fds */
+		startup_pipe = REEXEC_STARTUP_PIPE_FD;
+		close(config_s[1]);
 		close(REEXEC_CONFIG_PASS_FD);
 		newsock = sock_out = sock_in = dup(STDIN_FILENO);
 		if ((fd = open(_PATH_DEVNULL, O_RDWR, 0)) != -1) {
@@ -2047,9 +2033,7 @@ main(int ac, char **av)
 #endif /* LIBWRAP */
 
 	/* Log the connection. */
-	verbose("Connection from %s port %d on %s port %d",
-	    remote_ip, remote_port,
-	    get_local_ipaddr(sock_in), get_local_port());
+	verbose("Connection from %.500s port %d", remote_ip, remote_port);
 
 	/*
 	 * We don't want to listen forever unless the other side
@@ -2453,8 +2437,7 @@ do_ssh2_kex(void)
 		packet_set_rekey_limits((u_int32_t)options.rekey_limit,
 		    (time_t)options.rekey_interval);
 
-	myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] = compat_pkalg_proposal(
-	    list_hostkey_types());
+	myproposal[PROPOSAL_SERVER_HOST_KEY_ALGS] = list_hostkey_types();
 
 	/* start key exchange */
 	kex = kex_setup(myproposal);
@@ -2463,7 +2446,6 @@ do_ssh2_kex(void)
 	kex->kex[KEX_DH_GEX_SHA1] = kexgex_server;
 	kex->kex[KEX_DH_GEX_SHA256] = kexgex_server;
 	kex->kex[KEX_ECDH_SHA2] = kexecdh_server;
-	kex->kex[KEX_C25519_SHA256] = kexc25519_server;
 	kex->server = 1;
 	kex->client_version_string=client_version_string;
 	kex->server_version_string=server_version_string;
