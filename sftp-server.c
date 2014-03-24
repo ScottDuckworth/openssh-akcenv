@@ -1,4 +1,4 @@
-/* $OpenBSD: sftp-server.c,v 1.97 2013/05/17 00:13:14 djm Exp $ */
+/* $OpenBSD: sftp-server.c,v 1.96 2013/01/04 19:26:38 jmc Exp $ */
 /*
  * Copyright (c) 2000-2004 Markus Friedl.  All rights reserved.
  *
@@ -319,11 +319,11 @@ handle_close(int handle)
 
 	if (handle_is_ok(handle, HANDLE_FILE)) {
 		ret = close(handles[handle].fd);
-		free(handles[handle].name);
+		xfree(handles[handle].name);
 		handle_unused(handle);
 	} else if (handle_is_ok(handle, HANDLE_DIR)) {
 		ret = closedir(handles[handle].dirp);
-		free(handles[handle].name);
+		xfree(handles[handle].name);
 		handle_unused(handle);
 	} else {
 		errno = ENOENT;
@@ -367,7 +367,7 @@ get_handle(void)
 	handle = get_string(&hlen);
 	if (hlen < 256)
 		val = handle_from_string(handle, hlen);
-	free(handle);
+	xfree(handle);
 	return val;
 }
 
@@ -450,7 +450,7 @@ send_handle(u_int32_t id, int handle)
 	handle_to_string(handle, &string, &hlen);
 	debug("request %u: sent handle handle %d", id, handle);
 	send_data_or_handle(SSH2_FXP_HANDLE, id, string, hlen);
-	free(string);
+	xfree(string);
 }
 
 static void
@@ -578,7 +578,7 @@ process_open(void)
 	}
 	if (status != SSH2_FX_OK)
 		send_status(id, status);
-	free(name);
+	xfree(name);
 }
 
 static void
@@ -679,7 +679,7 @@ process_write(void)
 		}
 	}
 	send_status(id, status);
-	free(data);
+	xfree(data);
 }
 
 static void
@@ -705,7 +705,7 @@ process_do_stat(int do_lstat)
 	}
 	if (status != SSH2_FX_OK)
 		send_status(id, status);
-	free(name);
+	xfree(name);
 }
 
 static void
@@ -807,7 +807,7 @@ process_setstat(void)
 			status = errno_to_portable(errno);
 	}
 	send_status(id, status);
-	free(name);
+	xfree(name);
 }
 
 static void
@@ -904,7 +904,7 @@ process_opendir(void)
 	}
 	if (status != SSH2_FX_OK)
 		send_status(id, status);
-	free(path);
+	xfree(path);
 }
 
 static void
@@ -953,13 +953,13 @@ process_readdir(void)
 		if (count > 0) {
 			send_names(id, count, stats);
 			for (i = 0; i < count; i++) {
-				free(stats[i].name);
-				free(stats[i].long_name);
+				xfree(stats[i].name);
+				xfree(stats[i].long_name);
 			}
 		} else {
 			send_status(id, SSH2_FX_EOF);
 		}
-		free(stats);
+		xfree(stats);
 	}
 }
 
@@ -982,7 +982,7 @@ process_remove(void)
 		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	}
 	send_status(id, status);
-	free(name);
+	xfree(name);
 }
 
 static void
@@ -1007,7 +1007,7 @@ process_mkdir(void)
 		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	}
 	send_status(id, status);
-	free(name);
+	xfree(name);
 }
 
 static void
@@ -1028,7 +1028,7 @@ process_rmdir(void)
 		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	}
 	send_status(id, status);
-	free(name);
+	xfree(name);
 }
 
 static void
@@ -1041,7 +1041,7 @@ process_realpath(void)
 	id = get_int();
 	path = get_string(NULL);
 	if (path[0] == '\0') {
-		free(path);
+		xfree(path);
 		path = xstrdup(".");
 	}
 	debug3("request %u: realpath", id);
@@ -1054,7 +1054,7 @@ process_realpath(void)
 		s.name = s.long_name = resolvedname;
 		send_names(id, 1, &s);
 	}
-	free(path);
+	xfree(path);
 }
 
 static void
@@ -1115,8 +1115,8 @@ process_rename(void)
 			status = SSH2_FX_OK;
 	}
 	send_status(id, status);
-	free(oldpath);
-	free(newpath);
+	xfree(oldpath);
+	xfree(newpath);
 }
 
 static void
@@ -1141,7 +1141,7 @@ process_readlink(void)
 		s.name = s.long_name = buf;
 		send_names(id, 1, &s);
 	}
-	free(path);
+	xfree(path);
 }
 
 static void
@@ -1164,8 +1164,8 @@ process_symlink(void)
 		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	}
 	send_status(id, status);
-	free(oldpath);
-	free(newpath);
+	xfree(oldpath);
+	xfree(newpath);
 }
 
 static void
@@ -1185,8 +1185,8 @@ process_extended_posix_rename(u_int32_t id)
 		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	}
 	send_status(id, status);
-	free(oldpath);
-	free(newpath);
+	xfree(oldpath);
+	xfree(newpath);
 }
 
 static void
@@ -1203,7 +1203,7 @@ process_extended_statvfs(u_int32_t id)
 		send_status(id, errno_to_portable(errno));
 	else
 		send_statvfs(id, &st);
-        free(path);
+        xfree(path);
 }
 
 static void
@@ -1242,8 +1242,8 @@ process_extended_hardlink(u_int32_t id)
 		status = (ret == -1) ? errno_to_portable(errno) : SSH2_FX_OK;
 	}
 	send_status(id, status);
-	free(oldpath);
-	free(newpath);
+	xfree(oldpath);
+	xfree(newpath);
 }
 
 static void
@@ -1264,7 +1264,7 @@ process_extended(void)
 		process_extended_hardlink(id);
 	else
 		send_status(id, SSH2_FX_OP_UNSUPPORTED);	/* MUST */
-	free(request);
+	xfree(request);
 }
 
 /* stolen from ssh-agent */

@@ -1,4 +1,4 @@
-/* $OpenBSD: ssh-agent.c,v 1.177 2013/07/20 01:50:20 djm Exp $ */
+/* $OpenBSD: ssh-agent.c,v 1.172 2011/06/03 01:37:40 dtucker Exp $ */
 /*
  * Author: Tatu Ylonen <ylo@cs.hut.fi>
  * Copyright (c) 1995 Tatu Ylonen <ylo@cs.hut.fi>, Espoo, Finland
@@ -106,7 +106,7 @@ typedef struct identity {
 	Key *key;
 	char *comment;
 	char *provider;
-	time_t death;
+	u_int death;
 	u_int confirm;
 } Identity;
 
@@ -122,7 +122,7 @@ int max_fd = 0;
 
 /* pid of shell == parent of agent */
 pid_t parent_pid = -1;
-time_t parent_alive_interval = 0;
+u_int parent_alive_interval = 0;
 
 /* pathname and directory for AUTH_SOCKET */
 char socket_name[MAXPATHLEN];
@@ -134,8 +134,8 @@ char *lock_passwd = NULL;
 
 extern char *__progname;
 
-/* Default lifetime in seconds (0 == forever) */
-static long lifetime = 0;
+/* Default lifetime (0 == forever) */
+static int lifetime = 0;
 
 static void
 close_socket(SocketEntry *e)
@@ -172,9 +172,10 @@ static void
 free_identity(Identity *id)
 {
 	key_free(id->key);
-	free(id->provider);
-	free(id->comment);
-	free(id);
+	if (id->provider != NULL)
+		xfree(id->provider);
+	xfree(id->comment);
+	xfree(id);
 }
 
 /* return matching private key for given public key */
@@ -202,7 +203,7 @@ confirm_key(Identity *id)
 	if (ask_permission("Allow use of key %s?\nKey fingerprint %s.",
 	    id->comment, p))
 		ret = 0;
-	free(p);
+	xfree(p);
 
 	return (ret);
 }
@@ -229,7 +230,7 @@ process_request_identities(SocketEntry *e, int version)
 			u_int blen;
 			key_to_blob(id->key, &blob, &blen);
 			buffer_put_string(&msg, blob, blen);
-			free(blob);
+			xfree(blob);
 		}
 		buffer_put_cstring(&msg, id->comment);
 	}
@@ -347,9 +348,10 @@ process_sign_request2(SocketEntry *e)
 	buffer_append(&e->output, buffer_ptr(&msg),
 	    buffer_len(&msg));
 	buffer_free(&msg);
-	free(data);
-	free(blob);
-	free(signature);
+	xfree(data);
+	xfree(blob);
+	if (signature != NULL)
+		xfree(signature);
 	datafellows = odatafellows;
 }
 
@@ -376,7 +378,7 @@ process_remove_identity(SocketEntry *e, int version)
 	case 2:
 		blob = buffer_get_string(&e->request, &blen);
 		key = key_from_blob(blob, blen);
-		free(blob);
+		xfree(blob);
 		break;
 	}
 	if (key != NULL) {
@@ -428,10 +430,10 @@ process_remove_all_identities(SocketEntry *e, int version)
 }
 
 /* removes expired keys and returns number of seconds until the next expiry */
-static time_t
+static u_int
 reaper(void)
 {
-	time_t deadline = 0, now = monotime();
+	u_int deadline = 0, now = time(NULL);
 	Identity *id, *nxt;
 	int version;
 	Idtab *tab;
@@ -463,9 +465,8 @@ process_add_identity(SocketEntry *e, int version)
 {
 	Idtab *tab = idtab_lookup(version);
 	Identity *id;
-	int type, success = 0, confirm = 0;
+	int type, success = 0, death = 0, confirm = 0;
 	char *type_name, *comment;
-	time_t death = 0;
 	Key *k = NULL;
 #ifdef OPENSSL_HAS_ECC
 	BIGNUM *exponent;
@@ -508,7 +509,7 @@ process_add_identity(SocketEntry *e, int version)
 			cert = buffer_get_string(&e->request, &len);
 			if ((k = key_from_blob(cert, len)) == NULL)
 				fatal("Certificate parse failed");
-			free(cert);
+			xfree(cert);
 			key_add_private(k);
 			buffer_get_bignum2(&e->request, k->dsa->priv_key);
 			break;
@@ -519,7 +520,7 @@ process_add_identity(SocketEntry *e, int version)
 			curve = buffer_get_string(&e->request, NULL);
 			if (k->ecdsa_nid != key_curve_name_to_nid(curve))
 				fatal("%s: curve names mismatch", __func__);
-			free(curve);
+			xfree(curve);
 			k->ecdsa = EC_KEY_new_by_curve_name(k->ecdsa_nid);
 			if (k->ecdsa == NULL)
 				fatal("%s: EC_KEY_new_by_curve_name failed",
@@ -550,7 +551,7 @@ process_add_identity(SocketEntry *e, int version)
 			cert = buffer_get_string(&e->request, &len);
 			if ((k = key_from_blob(cert, len)) == NULL)
 				fatal("Certificate parse failed");
-			free(cert);
+			xfree(cert);
 			key_add_private(k);
 			if ((exponent = BN_new()) == NULL)
 				fatal("%s: BN_new failed", __func__);
@@ -582,7 +583,7 @@ process_add_identity(SocketEntry *e, int version)
 			cert = buffer_get_string(&e->request, &len);
 			if ((k = key_from_blob(cert, len)) == NULL)
 				fatal("Certificate parse failed");
-			free(cert);
+			xfree(cert);
 			key_add_private(k);
 			buffer_get_bignum2(&e->request, k->rsa->d);
 			buffer_get_bignum2(&e->request, k->rsa->iqmp);
@@ -590,11 +591,11 @@ process_add_identity(SocketEntry *e, int version)
 			buffer_get_bignum2(&e->request, k->rsa->q);
 			break;
 		default:
-			free(type_name);
+			xfree(type_name);
 			buffer_clear(&e->request);
 			goto send;
 		}
-		free(type_name);
+		xfree(type_name);
 		break;
 	}
 	/* enable blinding */
@@ -612,13 +613,13 @@ process_add_identity(SocketEntry *e, int version)
 	}
 	comment = buffer_get_string(&e->request, NULL);
 	if (k == NULL) {
-		free(comment);
+		xfree(comment);
 		goto send;
 	}
 	while (buffer_len(&e->request)) {
 		switch ((type = buffer_get_char(&e->request))) {
 		case SSH_AGENT_CONSTRAIN_LIFETIME:
-			death = monotime() + buffer_get_int(&e->request);
+			death = time(NULL) + buffer_get_int(&e->request);
 			break;
 		case SSH_AGENT_CONSTRAIN_CONFIRM:
 			confirm = 1;
@@ -626,14 +627,14 @@ process_add_identity(SocketEntry *e, int version)
 		default:
 			error("process_add_identity: "
 			    "Unknown constraint type %d", type);
-			free(comment);
+			xfree(comment);
 			key_free(k);
 			goto send;
 		}
 	}
 	success = 1;
 	if (lifetime && !death)
-		death = monotime() + lifetime;
+		death = time(NULL) + lifetime;
 	if ((id = lookup_identity(k, version)) == NULL) {
 		id = xcalloc(1, sizeof(Identity));
 		id->key = k;
@@ -642,7 +643,7 @@ process_add_identity(SocketEntry *e, int version)
 		tab->nentries++;
 	} else {
 		key_free(k);
-		free(id->comment);
+		xfree(id->comment);
 	}
 	id->comment = comment;
 	id->death = death;
@@ -664,7 +665,7 @@ process_lock_agent(SocketEntry *e, int lock)
 	if (locked && !lock && strcmp(passwd, lock_passwd) == 0) {
 		locked = 0;
 		memset(lock_passwd, 0, strlen(lock_passwd));
-		free(lock_passwd);
+		xfree(lock_passwd);
 		lock_passwd = NULL;
 		success = 1;
 	} else if (!locked && lock) {
@@ -673,7 +674,7 @@ process_lock_agent(SocketEntry *e, int lock)
 		success = 1;
 	}
 	memset(passwd, 0, strlen(passwd));
-	free(passwd);
+	xfree(passwd);
 
 	buffer_put_int(&e->output, 1);
 	buffer_put_char(&e->output,
@@ -700,8 +701,7 @@ static void
 process_add_smartcard_key(SocketEntry *e)
 {
 	char *provider = NULL, *pin;
-	int i, type, version, count = 0, success = 0, confirm = 0;
-	time_t death = 0;
+	int i, type, version, count = 0, success = 0, death = 0, confirm = 0;
 	Key **keys = NULL, *k;
 	Identity *id;
 	Idtab *tab;
@@ -712,7 +712,7 @@ process_add_smartcard_key(SocketEntry *e)
 	while (buffer_len(&e->request)) {
 		switch ((type = buffer_get_char(&e->request))) {
 		case SSH_AGENT_CONSTRAIN_LIFETIME:
-			death = monotime() + buffer_get_int(&e->request);
+			death = time(NULL) + buffer_get_int(&e->request);
 			break;
 		case SSH_AGENT_CONSTRAIN_CONFIRM:
 			confirm = 1;
@@ -724,7 +724,7 @@ process_add_smartcard_key(SocketEntry *e)
 		}
 	}
 	if (lifetime && !death)
-		death = monotime() + lifetime;
+		death = time(NULL) + lifetime;
 
 	count = pkcs11_add_provider(provider, pin, &keys);
 	for (i = 0; i < count; i++) {
@@ -747,9 +747,12 @@ process_add_smartcard_key(SocketEntry *e)
 		keys[i] = NULL;
 	}
 send:
-	free(pin);
-	free(provider);
-	free(keys);
+	if (pin)
+		xfree(pin);
+	if (provider)
+		xfree(provider);
+	if (keys)
+		xfree(keys);
 	buffer_put_int(&e->output, 1);
 	buffer_put_char(&e->output,
 	    success ? SSH_AGENT_SUCCESS : SSH_AGENT_FAILURE);
@@ -765,7 +768,7 @@ process_remove_smartcard_key(SocketEntry *e)
 
 	provider = buffer_get_string(&e->request, NULL);
 	pin = buffer_get_string(&e->request, NULL);
-	free(pin);
+	xfree(pin);
 
 	for (version = 1; version < 3; version++) {
 		tab = idtab_lookup(version);
@@ -783,7 +786,7 @@ process_remove_smartcard_key(SocketEntry *e)
 	else
 		error("process_remove_smartcard_key:"
 		    " pkcs11_del_provider failed");
-	free(provider);
+	xfree(provider);
 	buffer_put_int(&e->output, 1);
 	buffer_put_char(&e->output,
 	    success ? SSH_AGENT_SUCCESS : SSH_AGENT_FAILURE);
@@ -928,10 +931,9 @@ static int
 prepare_select(fd_set **fdrp, fd_set **fdwp, int *fdl, u_int *nallocp,
     struct timeval **tvpp)
 {
-	u_int i, sz;
+	u_int i, sz, deadline;
 	int n = 0;
 	static struct timeval tv;
-	time_t deadline;
 
 	for (i = 0; i < sockets_alloc; i++) {
 		switch (sockets[i].type) {
@@ -949,8 +951,10 @@ prepare_select(fd_set **fdrp, fd_set **fdwp, int *fdl, u_int *nallocp,
 
 	sz = howmany(n+1, NFDBITS) * sizeof(fd_mask);
 	if (*fdrp == NULL || sz > *nallocp) {
-		free(*fdrp);
-		free(*fdwp);
+		if (*fdrp)
+			xfree(*fdrp);
+		if (*fdwp)
+			xfree(*fdwp);
 		*fdrp = xmalloc(sz);
 		*fdwp = xmalloc(sz);
 		*nallocp = sz;
@@ -1344,8 +1348,9 @@ skip:
 	if (ac > 0)
 		parent_alive_interval = 10;
 	idtab_init();
+	if (!d_flag)
+		signal(SIGINT, SIG_IGN);
 	signal(SIGPIPE, SIG_IGN);
-	signal(SIGINT, d_flag ? cleanup_handler : SIG_IGN);
 	signal(SIGHUP, cleanup_handler);
 	signal(SIGTERM, cleanup_handler);
 	nalloc = 0;

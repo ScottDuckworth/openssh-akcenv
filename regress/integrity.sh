@@ -1,4 +1,4 @@
-#	$OpenBSD: integrity.sh,v 1.10 2013/05/17 01:32:11 dtucker Exp $
+#	$OpenBSD: integrity.sh,v 1.7 2013/02/20 08:27:50 djm Exp $
 #	Placed in the Public Domain.
 
 tid="integrity"
@@ -21,13 +21,12 @@ config_defined HAVE_EVP_SHA256 &&
 config_defined OPENSSL_HAVE_EVPGCM && \
 	macs="$macs aes128-gcm@openssh.com aes256-gcm@openssh.com"
 
-# avoid DH group exchange as the extra traffic makes it harder to get the
-# offset into the stream right.
-echo "KexAlgorithms diffie-hellman-group14-sha1,diffie-hellman-group1-sha1" \
-	>> $OBJ/ssh_proxy
-
 # sshd-command for proxy (see test-exec.sh)
-cmd="$SUDO sh ${SRC}/sshd-log-wrapper.sh ${SSHD} ${TEST_SSHD_LOGFILE} -i -f $OBJ/sshd_proxy"
+cmd="$SUDO sh ${SRC}/sshd-log-wrapper.sh ${SSHD} ${TEST_SSH_LOGFILE} -i -f $OBJ/sshd_proxy"
+
+jot() {
+	awk "BEGIN { for (i = $2; i < $2 + $1; i++) { printf \"%d\n\", i } exit }"
+}
 
 for m in $macs; do
 	trace "test $tid: mac $m"
@@ -48,15 +47,14 @@ for m in $macs; do
 			aes*gcm*)	macopt="-c $m";;
 			*)		macopt="-m $m";;
 		esac
-		verbose "test $tid: $m @$off"
-		${SSH} $macopt -2F $OBJ/ssh_proxy -o "$pxy" \
-		    999.999.999.999 'printf "%4096s" " "' >/dev/null
+		output=`${SSH} $macopt -2F $OBJ/ssh_proxy -o "$pxy" \
+		    999.999.999.999 'printf "%4096s" " "' 2>&1`
 		if [ $? -eq 0 ]; then
 			fail "ssh -m $m succeeds with bit-flip at $off"
 		fi
 		ecnt=`expr $ecnt + 1`
-		output=$(tail -2 $TEST_SSH_LOGFILE | egrep -v "^debug" | \
-		     tr -s '\r\n' '.')
+		output=`echo $output | tr -s '\r\n' '.'`
+		verbose "test $tid: $m @$off $output"
 		case "$output" in
 		Bad?packet*)	elen=`expr $elen + 1`; skip=3;;
 		Corrupted?MAC* | Decryption?integrity?check?failed*)

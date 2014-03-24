@@ -1,18 +1,23 @@
-#	$OpenBSD: rekey.sh,v 1.8 2013/05/17 04:29:14 dtucker Exp $
+#	$OpenBSD: rekey.sh,v 1.1 2003/03/28 13:58:28 markus Exp $
 #	Placed in the Public Domain.
 
-tid="rekey"
+tid="rekey during transfer data"
 
-LOG=${TEST_SSH_LOGFILE}
+DATA=${OBJ}/data
+COPY=${OBJ}/copy
+LOG=${OBJ}/log
 
-rm -f ${LOG}
+rm -f ${COPY} ${LOG} ${DATA}
+touch ${DATA}
+dd if=/bin/ls${EXEEXT} of=${DATA} bs=1k seek=511 count=1 > /dev/null 2>&1
 
 for s in 16 1k 128k 256k; do
-	verbose "client rekeylimit ${s}"
-	rm -f ${COPY} ${LOG}
+	trace "rekeylimit ${s}"
+	rm -f ${COPY}
 	cat $DATA | \
 		${SSH} -oCompression=no -oRekeyLimit=$s \
-			-v -F $OBJ/ssh_proxy somehost "cat > ${COPY}"
+			-v -F $OBJ/ssh_proxy somehost "cat > ${COPY}" \
+		2> ${LOG}
 	if [ $? -ne 0 ]; then
 		fail "ssh failed"
 	fi
@@ -24,86 +29,4 @@ for s in 16 1k 128k 256k; do
 		fail "no rekeying occured"
 	fi
 done
-
-for s in 5 10; do
-	verbose "client rekeylimit default ${s}"
-	rm -f ${COPY} ${LOG}
-	cat $DATA | \
-		${SSH} -oCompression=no -oRekeyLimit="default $s" -F \
-			$OBJ/ssh_proxy somehost "cat >${COPY};sleep $s;sleep 3"
-	if [ $? -ne 0 ]; then
-		fail "ssh failed"
-	fi
-	cmp $DATA ${COPY}		|| fail "corrupted copy"
-	n=`grep 'NEWKEYS sent' ${LOG} | wc -l`
-	n=`expr $n - 1`
-	trace "$n rekeying(s)"
-	if [ $n -lt 1 ]; then
-		fail "no rekeying occured"
-	fi
-done
-
-for s in 5 10; do
-	verbose "client rekeylimit default ${s} no data"
-	rm -f ${COPY} ${LOG}
-	${SSH} -oCompression=no -oRekeyLimit="default $s" -F \
-		$OBJ/ssh_proxy somehost "sleep $s;sleep 3"
-	if [ $? -ne 0 ]; then
-		fail "ssh failed"
-	fi
-	n=`grep 'NEWKEYS sent' ${LOG} | wc -l`
-	n=`expr $n - 1`
-	trace "$n rekeying(s)"
-	if [ $n -lt 1 ]; then
-		fail "no rekeying occured"
-	fi
-done
-
-echo "rekeylimit default 5" >>$OBJ/sshd_proxy
-for s in 5 10; do
-	verbose "server rekeylimit default ${s} no data"
-	rm -f ${COPY} ${LOG}
-	${SSH} -oCompression=no -F $OBJ/ssh_proxy somehost "sleep $s;sleep 3"
-	if [ $? -ne 0 ]; then
-		fail "ssh failed"
-	fi
-	n=`grep 'NEWKEYS sent' ${LOG} | wc -l`
-	n=`expr $n - 1`
-	trace "$n rekeying(s)"
-	if [ $n -lt 1 ]; then
-		fail "no rekeying occured"
-	fi
-done
-
-verbose "rekeylimit parsing"
-for size in 16 1k 1K 1m 1M 1g 1G; do
-    for time in 1 1m 1M 1h 1H 1d 1D 1w 1W; do
-	case $size in
-		16)	bytes=16 ;;
-		1k|1K)	bytes=1024 ;;
-		1m|1M)	bytes=1048576 ;;
-		1g|1G)	bytes=1073741824 ;;
-	esac
-	case $time in
-		1)	seconds=1 ;;
-		1m|1M)	seconds=60 ;;
-		1h|1H)	seconds=3600 ;;
-		1d|1D)	seconds=86400 ;;
-		1w|1W)	seconds=604800 ;;
-	esac
-
-	b=`$SUDO ${SSHD} -T -o "rekeylimit $size $time" -f $OBJ/sshd_proxy | \
-	    awk '/rekeylimit/{print $2}'`
-	s=`$SUDO ${SSHD} -T -o "rekeylimit $size $time" -f $OBJ/sshd_proxy | \
-	    awk '/rekeylimit/{print $3}'`
-
-	if [ "$bytes" != "$b" ]; then
-		fatal "rekeylimit size: expected $bytes got $b"
-	fi
-	if [ "$seconds" != "$s" ]; then
-		fatal "rekeylimit time: expected $time got $s"
-	fi
-    done
-done
-
-rm -f ${COPY} ${DATA}
+rm -f ${COPY} ${LOG} ${DATA}

@@ -1,4 +1,4 @@
-/* $OpenBSD: gss-serv-krb5.c,v 1.8 2013/07/20 01:55:13 djm Exp $ */
+/* $OpenBSD: gss-serv-krb5.c,v 1.7 2006/08/03 03:34:42 deraadt Exp $ */
 
 /*
  * Copyright (c) 2001-2003 Simon Wilkinson. All rights reserved.
@@ -48,11 +48,12 @@ extern ServerOptions options;
 
 #ifdef HEIMDAL
 # include <krb5.h>
-#endif
-#ifdef HAVE_GSSAPI_KRB5_H
-# include <gssapi_krb5.h>
-#elif HAVE_GSSAPI_GSSAPI_KRB5_H
-# include <gssapi/gssapi_krb5.h>
+#else
+# ifdef HAVE_GSSAPI_KRB5_H
+#  include <gssapi_krb5.h>
+# elif HAVE_GSSAPI_GSSAPI_KRB5_H
+#  include <gssapi/gssapi_krb5.h>
+# endif
 #endif
 
 static krb5_context krb_context = NULL;
@@ -86,16 +87,14 @@ ssh_gssapi_krb5_userok(ssh_gssapi_client *client, char *name)
 {
 	krb5_principal princ;
 	int retval;
-	const char *errmsg;
 
 	if (ssh_gssapi_krb5_init() == 0)
 		return 0;
 
 	if ((retval = krb5_parse_name(krb_context, client->exportedname.value,
 	    &princ))) {
-		errmsg = krb5_get_error_message(krb_context, retval);
-		logit("krb5_parse_name(): %.100s", errmsg);
-		krb5_free_error_message(krb_context, errmsg);
+		logit("krb5_parse_name(): %.100s",
+		    krb5_get_err_text(krb_context, retval));
 		return 0;
 	}
 	if (krb5_kuserok(krb_context, princ, name)) {
@@ -121,7 +120,6 @@ ssh_gssapi_krb5_storecreds(ssh_gssapi_client *client)
 	krb5_principal princ;
 	OM_uint32 maj_status, min_status;
 	int len;
-	const char *errmsg;
 
 	if (client->creds == NULL) {
 		debug("No credentials stored");
@@ -132,34 +130,30 @@ ssh_gssapi_krb5_storecreds(ssh_gssapi_client *client)
 		return;
 
 #ifdef HEIMDAL
-	if ((problem = krb5_cc_new_unique(krb_context, krb5_fcc_ops.prefix,
-	    NULL, &ccache)) != 0) {
-		errmsg = krb5_get_error_message(krb_context, problem);
-		logit("krb5_cc_new_unique(): %.100s", errmsg);
-		krb5_free_error_message(krb_context, errmsg);
+	if ((problem = krb5_cc_gen_new(krb_context, &krb5_fcc_ops, &ccache))) {
+		logit("krb5_cc_gen_new(): %.100s",
+		    krb5_get_err_text(krb_context, problem));
 		return;
 	}
 #else
 	if ((problem = ssh_krb5_cc_gen(krb_context, &ccache))) {
-		errmsg = krb5_get_error_message(krb_context, problem);
-		logit("ssh_krb5_cc_gen(): %.100s", errmsg);
-		krb5_free_error_message(krb_context, errmsg);
+		logit("ssh_krb5_cc_gen(): %.100s",
+		    krb5_get_err_text(krb_context, problem));
 		return;
 	}
 #endif	/* #ifdef HEIMDAL */
 
 	if ((problem = krb5_parse_name(krb_context,
 	    client->exportedname.value, &princ))) {
-		errmsg = krb5_get_error_message(krb_context, problem);
-		logit("krb5_parse_name(): %.100s", errmsg);
-		krb5_free_error_message(krb_context, errmsg);
+		logit("krb5_parse_name(): %.100s",
+		    krb5_get_err_text(krb_context, problem));
+		krb5_cc_destroy(krb_context, ccache);
 		return;
 	}
 
 	if ((problem = krb5_cc_initialize(krb_context, ccache, princ))) {
-		errmsg = krb5_get_error_message(krb_context, problem);
-		logit("krb5_cc_initialize(): %.100s", errmsg);
-		krb5_free_error_message(krb_context, errmsg);
+		logit("krb5_cc_initialize(): %.100s",
+		    krb5_get_err_text(krb_context, problem));
 		krb5_free_principal(krb_context, princ);
 		krb5_cc_destroy(krb_context, ccache);
 		return;

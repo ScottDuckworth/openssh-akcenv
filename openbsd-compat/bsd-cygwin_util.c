@@ -97,7 +97,7 @@ fetch_windows_environment(void)
 void
 free_windows_environment(char **p)
 {
-	free(p);
+	xfree(p);
 }
 
 #endif /* HAVE_CYGWIN */

@@ -1,4 +1,4 @@
-/* $OpenBSD: ssh-keyscan.c,v 1.87 2013/05/17 00:13:14 djm Exp $ */
+/* $OpenBSD: ssh-keyscan.c,v 1.86 2012/04/11 13:34:17 djm Exp $ */
 /*
  * Copyright 1995, 1996 by David Mazieres <dm@lcs.mit.edu>.
  *
@@ -263,7 +263,7 @@ keygrab_ssh2(con *c)
 		exit(1);
 	}
 	nonfatal_fatal = 0;
-	free(c->c_kex);
+	xfree(c->c_kex);
 	c->c_kex = NULL;
 	packet_close();
 
@@ -329,7 +329,7 @@ conalloc(char *iname, char *oname, int keytype)
 	do {
 		name = xstrsep(&namelist, ",");
 		if (!name) {
-			free(namebase);
+			xfree(namebase);
 			return (-1);
 		}
 	} while ((s = tcpconnect(name)) < 0);
@@ -363,10 +363,10 @@ confree(int s)
 	if (s >= maxfd || fdcon[s].c_status == CS_UNUSED)
 		fatal("confree: attempt to free bad fdno %d", s);
 	close(s);
-	free(fdcon[s].c_namebase);
-	free(fdcon[s].c_output_name);
+	xfree(fdcon[s].c_namebase);
+	xfree(fdcon[s].c_output_name);
 	if (fdcon[s].c_status == CS_KEYS)
-		free(fdcon[s].c_data);
+		xfree(fdcon[s].c_data);
 	fdcon[s].c_status = CS_UNUSED;
 	fdcon[s].c_keytype = 0;
 	TAILQ_REMOVE(&tq, &fdcon[s], c_link);
@@ -553,8 +553,8 @@ conloop(void)
 		} else if (FD_ISSET(i, r))
 			conread(i);
 	}
-	free(r);
-	free(e);
+	xfree(r);
+	xfree(e);
 
 	c = TAILQ_FIRST(&tq);
 	while (c && (c->c_tv.tv_sec < now.tv_sec ||

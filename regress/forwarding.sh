@@ -1,8 +1,7 @@
-#	$OpenBSD: forwarding.sh,v 1.11 2013/06/10 21:56:43 dtucker Exp $
+#	$OpenBSD: forwarding.sh,v 1.8 2012/06/01 00:47:35 djm Exp $
 #	Placed in the Public Domain.
 
 tid="local and remote forwarding"
-
 DATA=/bin/ls${EXEEXT}
 
 start_sshd
@@ -27,9 +26,9 @@ for p in 1 2; do
 
 	trace "transfer over forwarded channels and check result"
 	${SSH} -$q -F $OBJ/ssh_config -p$last -o 'ConnectionAttempts=4' \
-		somehost cat ${DATA} > ${COPY}
-	test -f ${COPY}		|| fail "failed copy of ${DATA}"
-	cmp ${DATA} ${COPY}	|| fail "corrupted copy of ${DATA}"
+		somehost cat $DATA > $OBJ/ls.copy
+	test -f $OBJ/ls.copy			|| fail "failed copy $DATA"
+	cmp $DATA $OBJ/ls.copy			|| fail "corrupted copy of $DATA"
 
 	sleep 10
 done
@@ -76,7 +75,7 @@ for p in 1 2; do
 	else
 		# this one should fail
 		${SSH} -$p -F $OBJ/ssh_config -p ${base}01 true \
-		     >>$TEST_REGRESS_LOGFILE 2>&1 && \
+		     2>>$TEST_SSH_LOGFILE && \
 			fail "local forwarding not cleared"
 	fi
 	sleep 10
@@ -89,7 +88,7 @@ for p in 1 2; do
 	else
 		# this one should fail
 		${SSH} -$p -F $OBJ/ssh_config -p ${base}01 true \
-		     >>$TEST_REGRESS_LOGFILE 2>&1 && \
+		     2>>$TEST_SSH_LOGFILE && \
 			fail "remote forwarding not cleared"
 	fi
 	sleep 10
@@ -103,19 +102,4 @@ for p in 2; do
 	if [ $? != 0 ]; then
 		fail "stdio forwarding proto $p"
 	fi
-done
-
-echo "LocalForward ${base}01 127.0.0.1:$PORT" >> $OBJ/ssh_config
-echo "RemoteForward ${base}02 127.0.0.1:${base}01" >> $OBJ/ssh_config
-for p in 1 2; do
-	trace "config file: start forwarding, fork to background"
-	${SSH} -$p -F $OBJ/ssh_config -f somehost sleep 10
-
-	trace "config file: transfer over forwarded channels and check result"
-	${SSH} -F $OBJ/ssh_config -p${base}02 -o 'ConnectionAttempts=4' \
-		somehost cat ${DATA} > ${COPY}
-	test -f ${COPY}		|| fail "failed copy of ${DATA}"
-	cmp ${DATA} ${COPY}	|| fail "corrupted copy of ${DATA}"
-
-	wait
 done

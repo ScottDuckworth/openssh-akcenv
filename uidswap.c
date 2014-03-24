@@ -90,7 +90,8 @@ temporarily_use_uid(struct passwd *pw)
 		if (getgroups(saved_egroupslen, saved_egroups) < 0)
 			fatal("getgroups: %.100s", strerror(errno));
 	} else { /* saved_egroupslen == 0 */
-		free(saved_egroups);
+		if (saved_egroups != NULL)
+			xfree(saved_egroups);
 	}
 
 	/* set and save the user's groups */
@@ -108,7 +109,8 @@ temporarily_use_uid(struct passwd *pw)
 			if (getgroups(user_groupslen, user_groups) < 0)
 				fatal("getgroups: %.100s", strerror(errno));
 		} else { /* user_groupslen == 0 */
-			free(user_groups);
+			if (user_groups)
+				xfree(user_groups);
 		}
 	}
 	/* Set the effective uid to the given (unprivileged) uid. */

@@ -1,4 +1,4 @@
-/* $OpenBSD: auth.c,v 1.103 2013/05/19 02:42:42 djm Exp $ */
+/* $OpenBSD: auth.c,v 1.101 2013/02/06 00:22:21 dtucker Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  *
@@ -72,7 +72,6 @@
 #include "authfile.h"
 #include "monitor_wrap.h"
 #include "krl.h"
-#include "compat.h"
 
 /* import */
 extern ServerOptions options;
@@ -166,17 +165,17 @@ allowed_user(struct passwd * pw)
 		if (stat(shell, &st) != 0) {
 			logit("User %.100s not allowed because shell %.100s "
 			    "does not exist", pw->pw_name, shell);
-			free(shell);
+			xfree(shell);
 			return 0;
 		}
 		if (S_ISREG(st.st_mode) == 0 ||
 		    (st.st_mode & (S_IXOTH|S_IXUSR|S_IXGRP)) == 0) {
 			logit("User %.100s not allowed because shell %.100s "
 			    "is not executable", pw->pw_name, shell);
-			free(shell);
+			xfree(shell);
 			return 0;
 		}
-		free(shell);
+		xfree(shell);
 	}
 
 	if (options.num_deny_users > 0 || options.num_allow_users > 0 ||
@@ -253,25 +252,8 @@ allowed_user(struct passwd * pw)
 }
 
 void
-auth_info(Authctxt *authctxt, const char *fmt, ...)
-{
-	va_list ap;
-        int i;
-
-	free(authctxt->info);
-	authctxt->info = NULL;
-
-	va_start(ap, fmt);
-	i = vasprintf(&authctxt->info, fmt, ap);
-	va_end(ap);
-
-	if (i < 0 || authctxt->info == NULL)
-		fatal("vasprintf failed");
-}
-
-void
 auth_log(Authctxt *authctxt, int authenticated, int partial,
-    const char *method, const char *submethod)
+    const char *method, const char *submethod, const char *info)
 {
 	void (*authlog) (const char *fmt,...) = verbose;
 	char *authmsg;
@@ -293,7 +275,7 @@ auth_log(Authctxt *authctxt, int authenticated, int partial,
 	else
 		authmsg = authenticated ? "Accepted" : "Failed";
 
-	authlog("%s %s%s%s for %s%.100s from %.200s port %d %s%s%s",
+	authlog("%s %s%s%s for %s%.100s from %.200s port %d%s",
 	    authmsg,
 	    method,
 	    submethod != NULL ? "/" : "", submethod == NULL ? "" : submethod,
@@ -301,11 +283,7 @@ auth_log(Authctxt *authctxt, int authenticated, int partial,
 	    authctxt->user,
 	    get_remote_ipaddr(),
 	    get_remote_port(),
-	    compat20 ? "ssh2" : "ssh1",
-	    authctxt->info != NULL ? ": " : "",
-	    authctxt->info != NULL ? authctxt->info : "");
-	free(authctxt->info);
-	authctxt->info = NULL;
+	    info);
 
 #ifdef CUSTOM_FAILED_LOGIN
 	if (authenticated == 0 && !authctxt->postponed &&
@@ -377,7 +355,7 @@ expand_authorized_keys(const char *filename, struct passwd *pw)
 	i = snprintf(ret, sizeof(ret), "%s/%s", pw->pw_dir, file);
 	if (i < 0 || (size_t)i >= sizeof(ret))
 		fatal("expand_authorized_keys: path too long");
-	free(file);
+	xfree(file);
 	return (xstrdup(ret));
 }
 
@@ -419,7 +397,7 @@ check_key_in_hostfiles(struct passwd *pw, Key *key, const char *host,
 			load_hostkeys(hostkeys, host, user_hostfile);
 			restore_uid();
 		}
-		free(user_hostfile);
+		xfree(user_hostfile);
 	}
 	host_status = check_key_in_hostkeys(hostkeys, key, &found);
 	if (host_status == HOST_REVOKED)
@@ -688,7 +666,7 @@ auth_key_is_revoked(Key *key)
 		key_fp = key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX);
 		error("WARNING: authentication attempt with a revoked "
 		    "%s key %s ", key_type(key), key_fp);
-		free(key_fp);
+		xfree(key_fp);
 		return 1;
 	}
 	fatal("key_in_file returned junk");
@@ -719,7 +697,7 @@ auth_debug_send(void)
 	while (buffer_len(&auth_debug)) {
 		msg = buffer_get_string(&auth_debug, NULL);
 		packet_send_debug("%s", msg);
-		free(msg);
+		xfree(msg);
 	}
 }
 
@@ -743,12 +721,10 @@ fakepw(void)
 	fake.pw_name = "NOUSER";
 	fake.pw_passwd =
 	    "$2a$06$r3.juUaHZDlIbQaO2dS9FuYxL1W9M81R1Tc92PoSNmzvpEqLkLGrK";
-#ifdef HAVE_STRUCT_PASSWD_PW_GECOS
 	fake.pw_gecos = "NOUSER";
-#endif
 	fake.pw_uid = privsep_pw == NULL ? (uid_t)-1 : privsep_pw->pw_uid;
 	fake.pw_gid = privsep_pw == NULL ? (gid_t)-1 : privsep_pw->pw_gid;
-#ifdef HAVE_STRUCT_PASSWD_PW_CLASS
+#ifdef HAVE_PW_CLASS_IN_PASSWD
 	fake.pw_class = "";
 #endif
 	fake.pw_dir = "/nonexist";

@@ -1,4 +1,4 @@
-/* $OpenBSD: ssh-pkcs11-client.c,v 1.4 2013/05/17 00:13:14 djm Exp $ */
+/* $OpenBSD: ssh-pkcs11-client.c,v 1.3 2012/01/16 20:34:09 miod Exp $ */
 /*
  * Copyright (c) 2010 Markus Friedl.  All rights reserved.
  *
@@ -121,7 +121,7 @@ pkcs11_rsa_private_encrypt(int flen, const u_char *from, u_char *to, RSA *rsa,
 	buffer_put_string(&msg, blob, blen);
 	buffer_put_string(&msg, from, flen);
 	buffer_put_int(&msg, 0);
-	free(blob);
+	xfree(blob);
 	send_msg(&msg);
 	buffer_clear(&msg);
 
@@ -131,7 +131,7 @@ pkcs11_rsa_private_encrypt(int flen, const u_char *from, u_char *to, RSA *rsa,
 			memcpy(to, signature, slen);
 			ret = slen;
 		}
-		free(signature);
+		xfree(signature);
 	}
 	buffer_free(&msg);
 	return (ret);
@@ -205,11 +205,11 @@ pkcs11_add_provider(char *name, char *pin, Key ***keysp)
 		*keysp = xcalloc(nkeys, sizeof(Key *));
 		for (i = 0; i < nkeys; i++) {
 			blob = buffer_get_string(&msg, &blen);
-			free(buffer_get_string(&msg, NULL));
+			xfree(buffer_get_string(&msg, NULL));
 			k = key_from_blob(blob, blen);
 			wrap_key(k->rsa);
 			(*keysp)[i] = k;
-			free(blob);
+			xfree(blob);
 		}
 	} else {
 		nkeys = -1;

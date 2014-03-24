@@ -1,4 +1,4 @@
-/* $OpenBSD: auth2-hostbased.c,v 1.16 2013/06/21 00:34:49 djm Exp $ */
+/* $OpenBSD: auth2-hostbased.c,v 1.14 2010/08/04 05:42:47 djm Exp $ */
 /*
  * Copyright (c) 2000 Markus Friedl.  All rights reserved.
  *
@@ -116,10 +116,6 @@ userauth_hostbased(Authctxt *authctxt)
 #ifdef DEBUG_PK
 	buffer_dump(&b);
 #endif
-
-	pubkey_auth_info(authctxt, key,
-	    "client user \"%.100s\", client host \"%.100s\"", cuser, chost);
-
 	/* test for allowed key and correct signature */
 	authenticated = 0;
 	if (PRIVSEP(hostbased_key_allowed(authctxt->pw, cuser, chost, key)) &&
@@ -132,11 +128,11 @@ done:
 	debug2("userauth_hostbased: authenticated %d", authenticated);
 	if (key != NULL)
 		key_free(key);
-	free(pkalg);
-	free(pkblob);
-	free(cuser);
-	free(chost);
-	free(sig);
+	xfree(pkalg);
+	xfree(pkblob);
+	xfree(cuser);
+	xfree(chost);
+	xfree(sig);
 	return authenticated;
 }
 
@@ -211,7 +207,7 @@ hostbased_key_allowed(struct passwd *pw, const char *cuser, char *chost,
 			verbose("Accepted %s public key %s from %s@%s",
 			    key_type(key), fp, cuser, lookup);
 		}
-		free(fp);
+		xfree(fp);
 	}
 
 	return (host_status == HOST_OK);

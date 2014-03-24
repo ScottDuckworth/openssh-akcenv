@@ -1,4 +1,4 @@
-/* $OpenBSD: groupaccess.c,v 1.14 2013/05/17 00:13:13 djm Exp $ */
+/* $OpenBSD: groupaccess.c,v 1.13 2008/07/04 03:44:59 djm Exp $ */
 /*
  * Copyright (c) 2001 Kevin Steves.  All rights reserved.
  *
@@ -31,7 +31,6 @@
 #include <grp.h>
 #include <unistd.h>
 #include <stdarg.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include "xmalloc.h"
@@ -69,7 +68,7 @@ ga_init(const char *user, gid_t base)
 	for (i = 0, j = 0; i < ngroups; i++)
 		if ((gr = getgrgid(groups_bygid[i])) != NULL)
 			groups_byname[j++] = xstrdup(gr->gr_name);
-	free(groups_bygid);
+	xfree(groups_bygid);
 	return (ngroups = j);
 }
 
@@ -123,8 +122,8 @@ ga_free(void)
 
 	if (ngroups > 0) {
 		for (i = 0; i < ngroups; i++)
-			free(groups_byname[i]);
+			xfree(groups_byname[i]);
 		ngroups = 0;
-		free(groups_byname);
+		xfree(groups_byname);
 	}
 }

@@ -86,7 +86,7 @@ aix_usrinfo(struct passwd *pw)
 		fatal("Couldn't set usrinfo: %s", strerror(errno));
 	debug3("AIX/UsrInfo: set len %d", i);
 
-	free(cp);
+	xfree(cp);
 }
 
 # ifdef WITH_AIXAUTHENTICATE
@@ -215,14 +215,16 @@ sys_auth_passwd(Authctxt *ctxt, const char *password)
 		default: /* user can't change(2) or other error (-1) */
 			logit("Password can't be changed for user %s: %.100s",
 			    name, msg);
-			free(msg);
+			if (msg)
+				xfree(msg);
 			authsuccess = 0;
 		}
 
 		aix_restoreauthdb();
 	}
 
-	free(authmsg);
+	if (authmsg != NULL)
+		xfree(authmsg);
 
 	return authsuccess;
 }
@@ -267,7 +269,7 @@ sys_auth_allowed_user(struct passwd *pw, Buffer *loginmsg)
 
 	if (!permitted)
 		logit("Login restricted for %s: %.100s", pw->pw_name, msg);
-	free(msg);
+	xfree(msg);
 	return permitted;
 }
 
