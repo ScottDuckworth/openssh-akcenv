@@ -1,0 +1,94 @@
+diff --git a/auth2-pubkey.c b/auth2-pubkey.c
+index 2b3ecb1..d675e38 100644
+--- a/auth2-pubkey.c
++++ b/auth2-pubkey.c
+@@ -503,7 +503,8 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
+ 	struct stat st;
+ 	int status, devnull, p[2], i;
+ 	pid_t pid;
+-	char *username, errmsg[512];
++	long len;
++	char *username, *keytext, errmsg[512];
+ 
+ 	if (options.authorized_keys_command == NULL ||
+ 	    options.authorized_keys_command[0] != '/')
+@@ -562,6 +563,43 @@ user_key_command_allowed2(struct passwd *user_pw, Key *key)
+ 		for (i = 0; i < NSIG; i++)
+ 			signal(i, SIG_DFL);
+ 
++		keytext = key_fingerprint(key, SSH_FP_MD5, SSH_FP_HEX);
++		if (setenv(SSH_KEY_FINGERPRINT_ENV_NAME, keytext, 1) == -1) {
++			error("%s: setenv: %s", __func__, strerror(errno));
++			_exit(1);
++		}
++
++		if ((f = tmpfile()) == NULL) {
++			error("%s: tmpfile: %s", __func__, strerror(errno));
++			_exit(1);
++		}
++		if (!key_write(key, f)) {
++			error("%s: key_write: %s", __func__, strerror(errno));
++			_exit(1);
++		}
++		if ((len = ftell(f)) == -1) {
++			error("%s: ftell: %s", __func__, strerror(errno));
++			_exit(1);
++		}
++		if ((keytext = xmalloc(len + 1)) == NULL) {
++			error("%s: xmalloc: %s", __func__, strerror(errno));
++			_exit(1);
++		}
++		if ((fseek(f, 0, SEEK_SET)) != 0) {
++			error("%s: fseek: %s", __func__, strerror(errno));
++			_exit(1);
++		}
++		if (fread(keytext, 1, len, f) != len) {
++			error("%s: fread: %s", __func__, strerror(errno));
++			_exit(1);
++		}
++		keytext[len] = '\0';
++		fclose(f);
++		if (setenv(SSH_KEY_ENV_NAME, keytext, 1) == -1) {
++			error("%s: setenv: %s", __func__, strerror(errno));
++			_exit(1);
++		}
++
+ 		if ((devnull = open(_PATH_DEVNULL, O_RDWR)) == -1) {
+ 			error("%s: open %s: %s", __func__, _PATH_DEVNULL,
+ 			    strerror(errno));
+diff --git a/ssh.h b/ssh.h
+index c94633b..411ea86 100644
+--- a/ssh.h
++++ b/ssh.h
+@@ -97,3 +97,15 @@
+ 
+ /* Listen backlog for sshd, ssh-agent and forwarding sockets */
+ #define SSH_LISTEN_BACKLOG		128
++
++/*
++ * Name of the environment variable containing the incoming key passed
++ * to AuthorizedKeysCommand.
++ */
++#define SSH_KEY_ENV_NAME "SSH_KEY"
++
++/*
++ * Name of the environment variable containing the incoming key fingerprint
++ * passed to AuthorizedKeysCommand.
++ */
++#define SSH_KEY_FINGERPRINT_ENV_NAME "SSH_KEY_FINGERPRINT"
+diff --git a/sshd_config.5 b/sshd_config.5
+index 3abac6c..31f5d6c 100644
+--- a/sshd_config.5
++++ b/sshd_config.5
+@@ -203,6 +203,11 @@ It will be invoked with a single argument of the username
+ being authenticated, and should produce on standard output zero or
+ more lines of authorized_keys output (see AUTHORIZED_KEYS in
+ .Xr sshd 8 ) .
++The key being used for authentication (the key's type and the key text itself,
++separated by a space) will be available in the
++.Ev SSH_KEY
++environment variable, and the fingerprint of the key will be available in the
++.Ev SSH_KEY_FINGERPRINT environment variable.
+ If a key supplied by AuthorizedKeysCommand does not successfully authenticate
+ and authorize the user then public key authentication continues using the usual
+ .Cm AuthorizedKeysFile
