@@ -97,3 +97,15 @@
 
 /* Listen backlog for sshd, ssh-agent and forwarding sockets */
 #define SSH_LISTEN_BACKLOG		128
+
+/*
+ * Name of the environment variable containing the incoming key passed
+ * to AuthorizedKeysCommand.
+ */
+#define SSH_KEY_ENV_NAME "SSH_KEY"
+
+/*
+ * Name of the environment variable containing the incoming key fingerprint
+ * passed to AuthorizedKeysCommand.
+ */
+#define SSH_KEY_FINGERPRINT_ENV_NAME "SSH_KEY_FINGERPRINT"
