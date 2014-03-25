@@ -1,4 +1,4 @@
-# openssh-stdinkey
+# openssh-akcenv
 
 This project is a fork of [OpenSSH][1] which modifies the
 `AuthorizedKeysCommand` directive in `sshd_config` (present in OpenSSH 6.2 and
@@ -24,7 +24,7 @@ are likely many other use cases for this project.
 
 This git repository is organized into this branch (master), pristine OpenSSH
 branches (those that are just version numbers), and patched OpenSSH branches
-(those that end with `-stdinkey`).  The master branch contains this README.md
+(those that end with `-akcenv`).  The master branch contains this README.md
 file and patches suitable for input to the `patch` command against a specific
 version of the OpenSSH source code.
 
